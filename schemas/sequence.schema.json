@@ -1,0 +1,130 @@
+{
+  "$id":"/sequence",
+  "$paths":["/sequence/station", "/sequence/approach", "/sequence/work"],
+  "type":"object",
+  "properties": {
+    "goalsDefinition": {
+      "type":"object",
+      "properties": {
+        "definitionType": {
+          "const": "area"
+        },
+        "definition":{
+          "type":"object",
+          "properties":{
+            "rails":{
+              "anyOf": [
+                {
+                  "type":"array",
+                  "items":{
+                    "type":"string",
+                    "enum":["y+1292", "y-1292", "y+763", "y-763", "y+254", "y-254"],
+                    "uniqueItems": true
+                  }
+                }, 
+                {
+                    "type": "string",
+                    "const":"all"
+                }
+              ]
+            },
+            "railArea":{
+              "type":"string",
+              "enum":["web", "flange", "all"]
+            },
+            "crossbeamSide":{
+              "type":"string",
+              "enum":["front", "rear", "all"]
+            },
+            "railSide":{
+              "type":"string",
+              "enum":["front", "rear", "all"]
+            }
+          },
+          "additionalProperties":false
+        }
+      },
+      "additionalProperties":false
+    },
+    "initialSituation": {
+      "type":"object",
+      "properties":{
+        "robotSituation": {
+          "type":"object",
+          "properties": {
+            "effector": {
+              "type":"string",
+              "enum": ["no_effector", "flange_c_drilling", "web_c_drilling"]
+            },
+            "station": {
+              "type":"string"
+            },
+            "tcp_approach":{
+              "type":"string"
+            },
+            "tcp_work":{
+              "type":"string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "workSituation": {
+          "type":"object",
+          "properties":{
+            "kff_yn1292":{
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kff_yn763" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kff_yn254" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kff_yp254" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kff_yp763" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kff_yp1292" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kfr_yn1292" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kfr_yn763" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kfr_yn254" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kfr_yp254" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kfr_yp763" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            },
+            "kfr_yp1292" : {
+              "type":"string",
+              "enum": ["probed", "no_probed"]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
+  

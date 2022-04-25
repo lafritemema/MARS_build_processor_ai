@@ -1,0 +1,142 @@
+neo4j:
+  query_reg:
+    action:
+      match: null
+      return: 'properties(action) as definition'
+    preconditions: 
+      input: ['action']
+      match: 'with action
+        match
+          (action)<-[precondition:PRECONDITION]-
+          (precond_state:StateObject)
+        return
+          collect({state:precondition.state,
+            relation:precondition.relation,
+            priority:precondition.priority,
+            definition:properties(precond_state)}) as preconditions'
+      return: ['preconditions']
+    results: 
+      input: ['action']
+      match: 'with action
+      match
+          (action)-[result:RESULT]->
+          (result_state:StateObject)
+      return 
+        collect({definition:properties(result_state),
+          state:result.state,
+          relation:result.relation}) as results'
+      return: ['results']
+    assets: 
+      match: 'with action
+      match (action)-[:PERFORM_BY]->(asset:Asset)
+      return collect({definition: properties(asset),
+          type: labels(asset)}) as assets'
+      return: ['assets']
+    direct_action:
+      input: null
+      match: '
+      match (action:Resource:Action)
+      where
+          exists(
+          (:StateObject{uid:$state_object_uid})
+          -[:PRECONDITION{relation:$precondition_relation, state:$precondition_state}]->
+          (action)-[:RESULT{relation:$result_relation, state:$result_state}]
+          ->(:StateObject{uid:$state_object_uid})
+          )
+      return action'
+      return: ['action']
+    extended_action:
+      input: null
+      match: '
+      match (action:Resource:Action)
+      where 
+        exists(
+          (action)-[:RESULT{relation:$result_relation, state:$result_state}]
+          ->(:StateObject{uid:$state_object_uid})
+        )
+      return action'
+      return: ['action']
+    assy_by_area:
+      input: null 
+      match: 'match (assembly:Product:Assembly)-[:LOCALIZED_IN]->(area:Process:Area)
+      where $exist_area_links
+      return 
+        assembly.uid as uid, assembly.origin.x as position,
+        collect({area:area.reference+'_'+area.type, value:area.uid}) as area'
+      return: ['uid', 'position', area]
+    assy_by_reference:
+      input: null 
+      match: 'match (area:Process:Area)<-[:LOCALIZED_IN]-(assembly:Product:Assembly)<-[:FASTEN]->(fastener:Product:Fastener)
+      where fastener.reference in $fastener_list
+      return 
+        assembly.uid as uid, assembly.origin.x as position,
+        collect({area:area.reference+'_'+area.type, value:area.uid}) as area'
+      return: ['uid', 'position', area]
+    work_by_uidlist:
+      input: null
+      match: 'match (action:Resource:Action{type:"MOVE.TCP.WORK"})
+        -[result:RESULT]->(so:Resource:StateObject{uid:'tcp_work'})
+        where result.state in $uidlist
+        return action'
+      return: ['action']
+    work_by_area:
+      input:
+        id: 'uid'
+        source: 'assy_by_area'
+      match: 'with uid
+        match (action:Resource:Action{type:"MOVE.TCP.WORK"})-[result:RESULT]->(so:Resource:StateObject{uid:'tcp_work'})
+        where result.state = uid
+        return action'
+      return: ['action']
+    work_by_reference:
+      input:
+        id: 'uid'
+        source: 'assy_by_reference'
+      match: 'with uid
+        match (action:Resource:Action{type:"MOVE.TCP.WORK"})-[result:RESULT]->(so:Resource:StateObject{uid:'tcp_work'})
+        where result.state = uid
+        return action'
+      return: ['action']
+    station_by_area:
+      input: null
+      match: 'match (action:Resource:Action{type:"MOVE.STATION.WORK"})
+        -[result:RESULT]->(so:Resource:StateObject{uid:'station'})
+        where result.state =~ $area_regex
+        return action'
+      result: ['action']
+    approach_by_area:
+      input: null
+      match: 'match (action:Resource:Action{type:"MOVE.TCP.APPROACH"})
+        -[result:RESULT]->(so:Resource:StateObject{uid:'tcp_approach'})
+        where result.state =~ $area_regex
+        return action'
+      result: ['action']
+init_situation:
+  effector:
+    definition:
+      uid: 'effector'
+      description: 'effector state meta object'
+    state: 'no_effector'
+    priority: 1
+    relation: 'eq'
+  station:
+    definition:
+      uid: 'station'
+      description: 'station state meta object'
+    state: 'home_station'
+    relation: 'eq'
+    priority: 2
+  tcp_approach:
+    definition: 
+      uid: 'tcp_approach'
+      description: 'tcp approach state meta object'
+    state: 'move_station_position'
+    relation: 'eq'
+    priority: 3
+  tcp_work:
+    definition: 
+      uid: 'tcp_work'
+      description: 'tcp work state meta object'
+    state: 'out_work'
+    priority: 4
+    relation: 'eq'
