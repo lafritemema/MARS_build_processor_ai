@@ -1,5 +1,5 @@
 
-from .exceptions import ModelDataError
+from .exceptions import ModelException, ModelExceptionType
 from typing import List, Dict
 from .situation import Situation, StateObject
 
@@ -29,7 +29,9 @@ class Asset:
                          _type[0],
                          definition['interface'])
         except KeyError as error:
-            raise ModelDataError(Asset.__name__, error.args[0])
+            raise ModelException(['ASSET', 'PARSING'],
+                                 ModelExceptionType.PARSING_ERROR,
+                                f"one asset parameters is missing in the asset description, check your database.\nmissing parameter :{error.args[0]}\nasset uid: {definition['uid']}" )
 
         except Exception as e:
             print('Error not handled raise during StateObject parsing')
@@ -108,11 +110,11 @@ class Action:
                     results,
                     metadata)
 
-        except ModelDataError as error:
-            error.update_stack(Action.__name__)
+        except ModelException as error:
+            error.add_in_stack(['ACTION'])
             raise error
     
-    def to_json(self):
+    def to_dict(self):
         return {
             'uid': self._uid,
             'description': self._description,

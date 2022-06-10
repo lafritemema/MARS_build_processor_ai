@@ -1,5 +1,4 @@
 from enum import Enum, EnumMeta
-from tkinter.tix import Tree
 from typing import Dict, List
 from .marsnode import Action
 

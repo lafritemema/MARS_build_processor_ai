@@ -1,29 +1,94 @@
-from enum import Enum
-from typing import List
+from enum import EnumMeta
+from pyrsistent import b
+import yaml
+from exceptions import BaseException, BaseExceptionType
+from typing import Dict
+import glob
+import json
 
-class MsgDecorator(Enum):
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-
-class BaseError(Exception):
+# define metaclass for enumeration access
+class GetAttrEnum(EnumMeta):
+  """
+    Metaclass to get directly the value when call the attribute
+  """
+  def __getattribute__(cls, name: str) :
+    value = super().__getattribute__(name)
+    if isinstance(value, cls):
+        value = value.value
+    return value
   
-  def __init__(self, origin:str, message:str, error_type:str):
-    self._origin = origin
-    self._message = message
-    self._error_type = error_type
+class GetItemEnum(EnumMeta):
+  """
+    Metaclass to get directly the value when call the item
+  """
+  def __getitem__(self, name):
+    return super().__getitem__(name).value
 
-  def __repr__(self):
-    error_type = self._error_type.upper()
-    return f"{MsgDecorator[error_type].value}[{error_type}][{self._origin.upper()}] : {self._message}{MsgDecorator.ENDC.value}"
+def get_config_from_file(yaml_file:str)-> Dict:
+  """function to read and parse yaml config files
 
-  def __str__(self):
-    error_type = self._error_type.upper()
-    return f"{MsgDecorator[error_type].value}[{error_type}][{self._origin.upper()}] : {self._message}{MsgDecorator.ENDC.value}"
+  Args:
+      yaml_file (str): yaml config file
+
+  Raises:
+      BaseException: raise if config file not exist or yaml format is not conform
+
+  Returns:
+      Dict: the configuration under dict format
+  """
+
+  try:
+    with open(yaml_file, 'r') as f:
+        content = f.read()
+        config = yaml.load(content, Loader=yaml.Loader)
+
+    return config
+  except FileNotFoundError as error:
+    raise BaseException(['CONFIG', "LOAD"],
+                        BaseExceptionType.CONFIG_MISSING,
+                        f"no such configuration file {error.filename}")
+  except yaml.parser.ParserError as error:
+    raise BaseException(["CONFIG", "LOAD"],
+                        BaseExceptionType.CONFIG_NOT_CONFORM,
+                        f"the configuration file {yaml_file} not conform : yaml format not respected")
+
+def get_validation_schemas(schemas_dir:str)->Dict[str, Dict]:
+  """function to read and parse all json schemas contained in a directory
+    the schema files must have a .schema.json extension
+
+  Args:
+      schemas_dir (str): path of directory
+
+  Raises:
+      BaseException: raise if json format is not conform or elements are missing
+
+  Returns:
+      Dict: the configuration under dict format
+  """
+
+  schema_dict = {}
+
+  try:
+    for file in glob.glob(f"{schemas_dir}/*.schema.json"):
+      with open(file, 'r') as schema_file:
+        content = schema_file.read()
+        schema = json.loads(content)
+
+        # get the paths to validate with schema
+        # schema must contain a $paths key containing the paths to validate with the schema
+        # if not raise a config error
+        path_list = schema['$paths']
+                
+        # add the schema for each path
+        for path in path_list:
+          schema_dict[path] = schema
+        
+      return schema_dict
+  except json.JSONDecodeError as error :
+    raise BaseException(["CONFIG", "VALIDATION_SCHEMA"],
+                        BaseExceptionType.CONFIG_NOT_CONFORM,
+                        f"Validation schema file {file} is not valid, json format not conform\n{error.args[0]}")
+  except KeyError as error:
+    raise BaseException(["CONFIG", "VALIDATION_SCHEMA"],
+                        BaseExceptionType.CONFIG_NOT_CONFORM,
+                        f"Validation schema file {file} is not valid, key '$paths' is missing")

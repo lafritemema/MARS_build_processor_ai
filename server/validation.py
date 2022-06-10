@@ -1,7 +1,7 @@
 from typing import Dict
 import fastjsonschema
 from typing import Dict
-from .exceptions import QueryError
+from .exceptions import ServerException, ServerExceptionType
 
 class Validator(object):
   
@@ -22,8 +22,9 @@ class Validator(object):
       body = validate(body)
       return body
     except fastjsonschema.JsonSchemaException as error:
-      error_type = "BODY.INVALID"
-      error_origin = "REQUEST.VALIDATION"
-      raise QueryError(error.message, error_type, error_origin)
+      raise ServerException(['VALIDATION'],
+                            ServerExceptionType.INVALID_REQUEST,
+                            f"request body not under json format.\n{error.args[0]}",
+                            400)
 
   

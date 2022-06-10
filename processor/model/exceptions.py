@@ -1,14 +1,14 @@
-from exceptions import BaseError
+from exceptions import BaseException, ExceptionType
+from enum import Enum
+from typing import List
 
-class ModelDataError(BaseError):
-    def __init__(self, element:str, missing_key:str):
-        self._parsing_stack = [element]
-        super().__init__(f"Missing data {missing_key} for {element} creation.")
-   
-    @property
-    def parsing_stack(self):
-        return self._parsing_stack
+class ModelExceptionType(ExceptionType):
+    PARSING_ERROR = "MODEL_PARSING_ERROR"
 
-    def update_stack(self, new_element:str):
-        self._parsing_stack.append(new_element)
+
+class ModelException(BaseException):
+  def __init__(self, origin_stack:List[str], type:ModelExceptionType, description:str):
+    super().__init__(origin_stack,
+                     type,
+                     description)
     

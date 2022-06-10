@@ -1,18 +1,27 @@
 
-class BaseError(Exception):
-    def __init__(self, message:str):
-        self._message = message 
-        super().__init__(self._message)  
+from typing import List
+from enum import Enum
 
-    @property
-    def message(self):
-        return self._message
+class ExceptionType(Enum):
+  pass
 
-class ConfigError(BaseError):
-  def __init__(self, conf_object, message):
-    super().__init__(message)
-    self._conf_object = conf_object
+class BaseExceptionType(ExceptionType):
+  CONFIG_MISSING = "BASE_CONFIG_MISSING"
+  CONFIG_NOT_CONFORM = "BASE_CONFIG_NOT_CONFORM"
   
-  @property
-  def conf_object(self):
-    return self._conf_object
+
+class BaseException(Exception):
+  def __init__(self, origin_stack:List[str], type:ExceptionType, description:str):
+    self._origin_stack = origin_stack
+    self._type = type
+    self._description = description
+  
+  def add_in_stack(self, stack_update:List[str]):
+    self._origin_stack = stack_update + self._origin_stack
+  
+  def describe(self):
+    return {
+      "origin" : '.'.join(self._origin_stack),
+      "default" : self._type.value,
+      "description": self._description
+    }
