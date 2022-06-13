@@ -5,5 +5,3 @@ __pycache__
 .env
 history
 */__pycache__
-.gitignore
-history
