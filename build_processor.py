@@ -24,8 +24,6 @@ logging.getLogger("neo4j").setLevel(logging.WARNING)
 # init global var
 DATA_UNIT:DataUnit = None
 SEQUENCE_UNIT:SequenceUnit = None
-HTTP_SERVER:HttpServer = None
-AMQP_SERVER:AMQPServer = None
 
 DEFAULT_SITUATION_DEFINITION = None
 DEFAULT_GOALS_DEFINITION = None
@@ -169,7 +167,10 @@ def build_validator(schemas_dict:Dict)-> Validator:
 
 def main():
 
-  global AMQP_SERVER, HTTP_SERVER, DATA_UNIT, SEQUENCE_UNIT, DEFAULT_SITUATION_DEFINITION, DEFAULT_GOALS_DEFINITION
+  global DATA_UNIT, SEQUENCE_UNIT, DEFAULT_SITUATION_DEFINITION, DEFAULT_GOALS_DEFINITION
+
+  HTTP_SERVER:HttpServer = None
+  AMQP_SERVER:AMQPServer = None
 
   try:
     # check the neo4j authentification parameters
@@ -178,9 +179,9 @@ def main():
             "neo4j credentials parameters are missing, check NEO_USER and NEO_PASSWD environment variables")
     assert os.path.isdir(__VALIDATION_SCHEMA_DIR),\
                          (("VALIDATION_SCHEMA"),
-                          f"Validation schema directory {__VALIDATION_SCHEMA_DIR} not found")
+                          f"Validat+ion schema directory {__VALIDATION_SCHEMA_DIR} not found")
     
-   
+
     # get validations schemas stored in __VALIDATION_SCHEMA_DIR
     schemas_dict = get_validation_schemas(__VALIDATION_SCHEMA_DIR)
     # build the validator object
