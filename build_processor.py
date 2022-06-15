@@ -192,8 +192,8 @@ def main():
     MARS_CONFIG =  get_config_from_file(__MARS_CONFIG_FILE)
     
     # get default situation and goals from mars configuration
-    DEFAULT_SITUATION_DEFINITION = MARS_CONFIG['defaultParameters']['situations']
-    DEFAULT_GOALS_DEFINITION = MARS_CONFIG['defaultParameters']['goals']
+    DEFAULT_SITUATION_DEFINITION = MARS_CONFIG['default_parameters']['situations']
+    DEFAULT_GOALS_DEFINITION = MARS_CONFIG['default_parameters']['goals']
 
     # get database configuration from mars configuration
     DATABASE_CONFIG = MARS_CONFIG['database']
@@ -272,7 +272,12 @@ def main():
     origin, message = error.args[0]
     raise BaseException(['CONFIG'].extend(origin),
                         BaseExceptionType.CONFIG_MISSING,
-                        message)  
+                        message) 
+  except KeyError as error:
+    missing_key = error.args[0]
+    raise BaseException(['CONFIG'],
+                        BaseExceptionType.CONFIG_NOT_CONFORM,
+                        f"configuration is not conform, parameter {missing_key} is missing")
 
 if __name__ == '__main__':
   exit_code = 0
@@ -288,6 +293,7 @@ if __name__ == '__main__':
   except Exception as error:
     LOGGER.fatal(error)
   finally:
+    if DATA_UNIT:
       DATA_UNIT.close()
-      sys.exit(exit_code)
+    sys.exit(exit_code)
 
