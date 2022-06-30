@@ -68,7 +68,7 @@ def build_sequence(body:Dict,
                                       goals_definition,
                                       situation_definition)
   body = {
-    "sequence": json_sequence
+    "buildProcess": json_sequence
   }
 
   # return sequence under json form

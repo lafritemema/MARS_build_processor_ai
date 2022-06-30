@@ -38,7 +38,7 @@
             },
             "railSide":{
               "type":"string",
-              "enum":["front", "rear", "all"]
+              "enum":["left", "right", "all"]
             }
           },
           "additionalProperties":false
