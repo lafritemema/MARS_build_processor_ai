@@ -30,7 +30,7 @@ def __build_results():
 def __build_assets():
     assets = DBQuery()
     assets.input_clause.add('action')
-    assets.match_clause.add('(action)-[:PERFORM_BY]->(asset:Resource:Asset)')
+    assets.match_clause.add('(action)-[:PERFORMED_BY]->(asset:Resource:Asset)')
     assets.with_clause.add('''collect({definition: properties(asset),
                               type: labels(asset)})''', 'assets')
     assets.return_clause.add('assets')
