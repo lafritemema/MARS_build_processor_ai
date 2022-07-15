@@ -20,6 +20,7 @@ LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 LOGGER = logging.getLogger("cmd_generator")
 logging.getLogger("pika").setLevel(logging.WARNING)
 logging.getLogger("neo4j").setLevel(logging.WARNING)
+logging.getLogger("sequencer.solver").setLevel(logging.WARNING)
 
 # init global var
 DATA_UNIT:DataUnit = None

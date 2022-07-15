@@ -1,9 +1,9 @@
 http:
   port: 8001
   host: 'localhost'
-  activate: false
-amqp:
   activate: true
+amqp:
+  activate: false
   type: 'rabbitmq'
   host: 'debianvm'
   port: 5672

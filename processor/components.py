@@ -94,7 +94,7 @@ class SequenceUnit():
     # instantiate a sequence solver,
     # I pass a dataunit as parameter to it get the missing data
     self._solver = SequenceSolver(data_unit)
-    self._logger = logging.getLogger('sequence.processor')
+    self._logger = logging.getLogger('sequencer.processor')
     
   def build(self,
         sequence_type:SequenceTypeRegister,
@@ -122,16 +122,21 @@ class SequenceUnit():
 
     self._logger.info('build the sequence')
     # transform json data to actions
+    self._logger.info('transform data to actions')
     actions = [Action.from_dict(action) for action in records]
-
+    
     # sort action
+    self._logger.info('sort actions')
     actions = sort_by_position(actions)
 
+
     # use the solver to resolve problem and produce sequence
+    self._logger.info('solve the actions definition')
     sequence  = self._solver.resolve(actions, states_definition)
 
     # optimize the sequence
     # begin with all probing subsequence
+    self._logger.info('optimize the sequence')
     sequence = begin_with_probing(sequence)
 
     tsequence = time.time()
@@ -157,6 +162,7 @@ class SequenceSolver:
         self._init_situation = None
         # variable to store internal state definition
         self._history_state_def = None
+        self._logger = logging.getLogger('sequencer.solver')
 
     def resolve(self, goals: List[Action],
             init_situation_definition:Dict) -> List[Action]:
@@ -270,6 +276,7 @@ class SequenceSolver:
       Returns:
           Action: the action to perform to obtain the precondition
       """
+      self._logger.debug(f'expand the action {action}')
       # compare the action preconditions with actual situation, return the first different state
       result_state, precondition_state = action.preconditions.compare(self._situation)
       # build a state definition 
@@ -288,13 +295,16 @@ class SequenceSolver:
 
       # request to db to get the action
       t_action = self.__get_action_from_db(state_definition)
-      
+
       # if no action found in db, expand search 
       if not t_action: 
+        print('action not found with initial situation, extend the search')
+        self._logger.debug(f'expand the action {action}')
         # delete precondition parameter (keep only the result)
         del state_definition['precondition']
         # and do a new request
-        t_action =self.__get_action_from_db(state_definition)
+        t_action = self.__get_action_from_db(state_definition)
+
         # if no result, no action for state evolution in the database, raise an erro
         if not t_action :
             st_uid = state_definition.get('uid')
@@ -302,9 +312,9 @@ class SequenceSolver:
             raise ProcessException(['PROCESS', 'SOLVER', 'RESOLUTION'],
                                     ProcessExceptionType.SOLVER_ERROR,
                                     f"unable to solve the problem: no action to update the state {st_uid} to {st_res}, check your database")
-
       # reinsert the actual action in the goals queue
       # and return the result of expand
+      
       self._goals.append(action)
       return t_action
 
@@ -318,7 +328,10 @@ class SequenceSolver:
       Returns:
           bool: true if all precondition are verified else false
       """
-      return action.preconditions == self._situation
+      poss = action.preconditions == self._situation
+      self._logger.debug(f'possibility to perform action {action} -> {poss}')
+      return poss
+
     
     def __do(self, action:Action):
       """function to perform an action => update the actual situation
@@ -326,6 +339,8 @@ class SequenceSolver:
       Args:
           action (Action): action to perform
       """
+      self._logger.debug(f"perform the action {action}")
+
       for result in action.results:
           self._situation.update(result)
     
@@ -340,9 +355,12 @@ class SequenceSolver:
       Returns:
           Action|None: the action to perform to change the state or None if no action found
       """
-      # get the 
+      self._logger.debug(f"search in DB the action in db solving situation {states_definition}")
       records = self._data_unit.get_action_by_state(states_definition)
-
+      
       if len(records) > 0:
-          return Action.from_dict(records[0])
-
+        action = Action.from_dict(records[0])
+        self._logger.debug(f"action found : {action}")
+        return Action.from_dict(records[0])
+      else:
+        return None
