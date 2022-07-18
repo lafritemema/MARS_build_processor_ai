@@ -1,5 +1,4 @@
 from enum import EnumMeta
-from pyrsistent import b
 import yaml
 from exceptions import BaseException, BaseExceptionType
 from typing import Dict
@@ -44,11 +43,11 @@ def get_config_from_file(yaml_file:str)-> Dict:
 
     return config
   except FileNotFoundError as error:
-    raise BaseException(['CONFIG', "LOAD"],
+    raise BaseException(['YAML_CONFIG'],
                         BaseExceptionType.CONFIG_MISSING,
                         f"no such configuration file {error.filename}")
   except yaml.parser.ParserError as error:
-    raise BaseException(["CONFIG", "LOAD"],
+    raise BaseException(["YAML_CONFIG"],
                         BaseExceptionType.CONFIG_NOT_CONFORM,
                         f"the configuration file {yaml_file} not conform : yaml format not respected")
 
@@ -85,10 +84,10 @@ def get_validation_schemas(schemas_dir:str)->Dict[str, Dict]:
         
       return schema_dict
   except json.JSONDecodeError as error :
-    raise BaseException(["CONFIG", "VALIDATION_SCHEMA"],
+    raise BaseException(["VALIDATION_SCHEMA"],
                         BaseExceptionType.CONFIG_NOT_CONFORM,
                         f"Validation schema file {file} is not valid, json format not conform\n{error.args[0]}")
   except KeyError as error:
-    raise BaseException(["CONFIG", "VALIDATION_SCHEMA"],
+    raise BaseException(["VALIDATION_SCHEMA"],
                         BaseExceptionType.CONFIG_NOT_CONFORM,
                         f"Validation schema file {file} is not valid, key '$paths' is missing")
