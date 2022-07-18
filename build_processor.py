@@ -1,3 +1,4 @@
+from ast import arg
 from glob import glob
 from typing import Dict, Tuple
 from exceptions import BaseExceptionType, BaseException
@@ -5,22 +6,22 @@ from server.http import HttpServer, EFunction
 from server.amqp import AMQPServer, CPipeline, CFunction
 from server.exceptions import ServerException
 from server.validation import Validator
-from utils import get_config_from_file, get_validation_schemas
+from utils import GetAttrEnum, GetItemEnum, get_config_from_file, get_validation_schemas
 import re
 import os
 import sys
 import logging
-
+import argparse
+from enum import Enum
 from dotenv import load_dotenv
 from processor.components import DataUnit, SequenceUnit, SequenceTypeRegister
+from functools import partial
 
 load_dotenv()
 
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-LOGGER = logging.getLogger("cmd_generator")
-logging.getLogger("pika").setLevel(logging.WARNING)
-logging.getLogger("neo4j").setLevel(logging.WARNING)
-logging.getLogger("sequencer.solver").setLevel(logging.WARNING)
+__VALIDATION_SCHEMA_DIR = './schemas'
+__SERVER_CONFIG_FILE = './config/server.yaml'
+__MARS_CONFIG_FILE = './config/mars.yaml'
 
 # init global var
 DATA_UNIT:DataUnit = None
@@ -30,22 +31,29 @@ DEFAULT_SITUATION_DEFINITION = None
 DEFAULT_GOALS_DEFINITION = None
 
 # get neo4j credentials => env var
-NEO_USER  = os.getenv('DB_USERNAME')
-NEO_PASSWD = os.getenv('DB_PASSWORD')
-# get server configuration file path
-__SERVER_CONFIG_FILE = os.getenv('SERVER_CONFIG')
-__SERVER_CONFIG_FILE = __SERVER_CONFIG_FILE if __SERVER_CONFIG_FILE else './config/server.yaml'
-
-# get validation schema directory
-__VALIDATION_SCHEMA_DIR = os.getenv('VALIDATION_SCHEMA_DIR')
-__VALIDATION_SCHEMA_DIR = __VALIDATION_SCHEMA_DIR if __VALIDATION_SCHEMA_DIR else './schemas'
-
-# mars config file
-__MARS_CONFIG_FILE = os.getenv('MARS_CONFIG')
-__MARS_CONFIG_FILE = __MARS_CONFIG_FILE if __MARS_CONFIG_FILE else './config/mars.yaml'
+DB_USER  = os.getenv('DB_USERNAME')
+DB_PASSWD = os.getenv('DB_PASSWORD')
 
 # amqp topics
 __AMQP_TOPICS = "request.build_processor", "report.build_processor"
+
+class ConfigLoader(argparse.Action):
+  def __call__(self, parser, namespace, values, option_strings=None) -> Dict:
+    try:
+      if '--environment-config' in option_strings:
+        return get_config_from_file(values)
+      elif '--validation-schemas' in option_strings:
+        assert os.path.isdir(values)
+        # get validations schemas stored in __VALIDATION_SCHEMA_DIR
+        return get_validation_schemas(values)
+    except BaseException as error:
+      error.add_in_stack(['CONFIG'])
+      raise error
+    except AssertionError as error:
+      raise BaseException(["CONFIG", "VALIDATION_SCHEMA"],
+                        BaseExceptionType.CONFIG_MISSING,
+                        f"validation schema directory {values} not found") 
+
 
 def build_sequence(body:Dict,
                    headers:Dict,
@@ -166,7 +174,11 @@ def build_validator(schemas_dict:Dict)-> Validator:
   return validator
     
 
-def main():
+def main(activated_server:str,
+         server_config:str,
+         environment_config:str,
+         validation_schemas:str,
+         db_auth):
 
   global DATA_UNIT, SEQUENCE_UNIT, DEFAULT_SITUATION_DEFINITION, DEFAULT_GOALS_DEFINITION
 
@@ -174,47 +186,48 @@ def main():
   AMQP_SERVER:AMQPServer = None
 
   try:
-    # check the neo4j authentification parameters
-    assert NEO_USER and NEO_PASSWD,\
-           (("DB", "CREDENTIALS"),
-            "neo4j credentials parameters are missing, check NEO_USER and NEO_PASSWD environment variables")
-    assert os.path.isdir(__VALIDATION_SCHEMA_DIR),\
-                         (("VALIDATION_SCHEMA"),
-                          f"Validat+ion schema directory {__VALIDATION_SCHEMA_DIR} not found")
-    
-
-    # get validations schemas stored in __VALIDATION_SCHEMA_DIR
-    schemas_dict = get_validation_schemas(__VALIDATION_SCHEMA_DIR)
+        
     # build the validator object
-    request_validator = build_validator(schemas_dict)
+    request_validator = build_validator(validation_schemas)
 
     # TODO implement json schema for all configuration files
-    # get mars configuration
-    MARS_CONFIG =  get_config_from_file(__MARS_CONFIG_FILE)
     
     # get default situation and goals from mars configuration
-    DEFAULT_SITUATION_DEFINITION = MARS_CONFIG['default_parameters']['situations']
-    DEFAULT_GOALS_DEFINITION = MARS_CONFIG['default_parameters']['goals']
+    DEFAULT_SITUATION_DEFINITION = environment_config['default_parameters']['situations']
+    DEFAULT_GOALS_DEFINITION = environment_config['default_parameters']['goals']
 
     # get database configuration from mars configuration
-    DATABASE_CONFIG = MARS_CONFIG['database']
+    DATABASE_CONFIG = environment_config['database']
 
     # initialize the DataUnit in charge of the db communications 
     DATA_UNIT = DataUnit(host_uri=DATABASE_CONFIG['uri'],
-                         auth=(NEO_USER, NEO_PASSWD))
+                         auth=db_auth)
 
     # initialize the SEQUENCE_UNIT in charge of the processing
     # DATA_UNIT in parameter for db communication
     SEQUENCE_UNIT = SequenceUnit(data_unit=DATA_UNIT)
 
-    # load the servers config
-    SERVER_CONFIG = get_config_from_file(__SERVER_CONFIG_FILE)
-    http_config = SERVER_CONFIG.get('http')
-    amqp_config = SERVER_CONFIG.get('amqp')
+    http_config = server_config.get('http')
+    amqp_config = server_config.get('amqp')
+
+    if activated_server == 'amqp' and amqp_config:
+      LOGGER.info("build amqp server")
+      AMQP_SERVER = build_amqp_server(amqp_config)
+
+      LOGGER.info('configure amqp server')
+      AMQP_SERVER.add_queue(label="request_report",
+                            topics=__AMQP_TOPICS)
+
+      # prepare a consumer pipeline
+      # no topic parameter for publish => report_topic contained in the message header
+      req_pipeline = CPipeline([CFunction(build_sequence),
+                                CFunction(AMQP_SERVER.publish)])
+      
+      AMQP_SERVER.add_consumer('request.build_processor', req_pipeline)
 
     # TODO implement multithreading if two activated server
     # if http server activate in configuration
-    if http_config and http_config.get('activate'):
+    elif activated_server == 'http' and http_config :
       LOGGER.info("build http server")
       HTTP_HOST, HTTP_PORT = get_http_para_from_config(http_config)
       HTTP_SERVER = HttpServer(name='build_processor',
@@ -234,22 +247,6 @@ def main():
                       EFunction(build_sequence),
                       methods=['GET'])
 
-    #if amqp server activate in the configuration
-    if amqp_config and amqp_config.get('activate'):
-      LOGGER.info("build amqp server")
-      AMQP_SERVER = build_amqp_server(amqp_config)
-
-      LOGGER.info('configure amqp server')
-      AMQP_SERVER.add_queue(label="request_report",
-                            topics=__AMQP_TOPICS)
-
-      # prepare a consumer pipeline
-      # no topic parameter for publish => report_topic contained in the message header
-      req_pipeline = CPipeline([CFunction(build_sequence),
-                                CFunction(AMQP_SERVER.publish)])
-      
-      AMQP_SERVER.add_consumer('request.build_processor', req_pipeline)
-    
     # if no server activated, raise an error
     if not HTTP_SERVER and not AMQP_SERVER:
       raise BaseException(['CONFIG', 'SERVER'],
@@ -269,11 +266,6 @@ def main():
   except BaseException as error:
     error.add_in_stack(['INIT'])
     raise error
-  except AssertionError as error:
-    origin, message = error.args[0]
-    raise BaseException(['CONFIG'].extend(origin),
-                        BaseExceptionType.CONFIG_MISSING,
-                        message) 
   except KeyError as error:
     missing_key = error.args[0]
     raise BaseException(['CONFIG'],
@@ -283,18 +275,78 @@ def main():
 if __name__ == '__main__':
   exit_code = 0
   try:
-    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
+    
+    LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    LOGGER = logging.getLogger("cmd_generator")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', "--verbose", action='store_true')
+    parser.add_argument('-s', '--server',
+                        type=str,
+                        choices=['amqp', 'http'],
+                        default='amqp',
+                        help='type of server used for communications')
+    
+    parser.add_argument('--server-config',
+                        type=str,
+                        nargs=1,
+                        action=ConfigLoader,
+                        help='path of server configuration yaml file')
+
+    parser.add_argument('--environment-config',
+                        type=str,
+                        nargs=1,
+                        action=ConfigLoader,
+                        help='path of environment configuration yaml file')
+    
+    parser.add_argument('--validation-schemas',
+                        type=str,
+                        nargs=1,
+                        action=ConfigLoader,
+                        help='path of the directory contains schemas for requests validations')
+
+    args = parser.parse_args()
+    args.validation_schemas = get_validation_schemas(__VALIDATION_SCHEMA_DIR)\
+                              if not args.validation_schemas else args.validation_schemas
+    args.server_config = get_config_from_file(__SERVER_CONFIG_FILE)\
+                         if not args.server_config else args.server_config
+    args.environment_config = get_config_from_file(__MARS_CONFIG_FILE)\
+                              if not args.environment_config else args.environment_config
+    
+    DB_USER  = os.getenv('DB_USERNAME')
+    DB_PASSWD = os.getenv('DB_PASSWORD')
+
+    assert DB_USER and DB_PASSWD, "missing database authentification parameters DB_USERNAME and/or DB_PASSWORD"
+
+    
+    if args.verbose:
+      logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
+    else:
+      logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+    logging.getLogger("pika").setLevel(logging.WARNING)
+    logging.getLogger("neo4j").setLevel(logging.WARNING)
+
     LOGGER.info("run build_processor service")
-    main()
+    main(activated_server=args.server,
+         server_config=args.server_config,
+         environment_config=args.environment_config,
+         validation_schemas=args.validation_schemas,
+         db_auth=(DB_USER, DB_PASSWD))
+  
   except BaseException as error:
     LOGGER.fatal(error.describe())
     exit_code=1
+  except AssertionError as error:
+    message = error.args[0]
+    LOGGER.fatal(message)
   except KeyboardInterrupt as error:
     LOGGER.info("manual interruption")
-  except Exception as error:
-    LOGGER.fatal(error)
-  finally:
+  # except Exception as error:
+  #   LOGGER.fatal(error)
+  '''finally:
     if DATA_UNIT:
       DATA_UNIT.close()
-    sys.exit(exit_code)
+    sys.exit(exit_code)'''
+
 
