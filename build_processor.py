@@ -15,7 +15,6 @@ import argparse
 from enum import Enum
 from dotenv import load_dotenv
 from processor.components import DataUnit, SequenceUnit, SequenceTypeRegister
-from functools import partial
 
 load_dotenv()
 
@@ -178,7 +177,7 @@ def main(activated_server:str,
          server_config:str,
          environment_config:str,
          validation_schemas:str,
-         db_auth):
+         db_auth:Tuple[str, str]):
 
   global DATA_UNIT, SEQUENCE_UNIT, DEFAULT_SITUATION_DEFINITION, DEFAULT_GOALS_DEFINITION
 
@@ -191,7 +190,6 @@ def main(activated_server:str,
     request_validator = build_validator(validation_schemas)
 
     # TODO implement json schema for all configuration files
-    
     # get default situation and goals from mars configuration
     DEFAULT_SITUATION_DEFINITION = environment_config['default_parameters']['situations']
     DEFAULT_GOALS_DEFINITION = environment_config['default_parameters']['goals']
@@ -273,9 +271,7 @@ def main(activated_server:str,
                         f"configuration is not conform, parameter {missing_key} is missing")
 
 if __name__ == '__main__':
-  exit_code = 0
   try:
-    
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     LOGGER = logging.getLogger("cmd_generator")
 
@@ -316,8 +312,8 @@ if __name__ == '__main__':
     DB_USER  = os.getenv('DB_USERNAME')
     DB_PASSWD = os.getenv('DB_PASSWORD')
 
+    # check if db credentials are in defined (passed in env var)
     assert DB_USER and DB_PASSWD, "missing database authentification parameters DB_USERNAME and/or DB_PASSWORD"
-
     
     if args.verbose:
       logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
@@ -336,17 +332,14 @@ if __name__ == '__main__':
   
   except BaseException as error:
     LOGGER.fatal(error.describe())
-    exit_code=1
   except AssertionError as error:
     message = error.args[0]
     LOGGER.fatal(message)
   except KeyboardInterrupt as error:
     LOGGER.info("manual interruption")
-  # except Exception as error:
-  #   LOGGER.fatal(error)
-  '''finally:
+  finally:
     if DATA_UNIT:
       DATA_UNIT.close()
-    sys.exit(exit_code)'''
+    sys.exit(1)
 
 
