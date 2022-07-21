@@ -6,7 +6,7 @@ from .marsnode import Action
 AIRCRAFT_RAIL_ORDER = ("y+1292", "y+763", "y+254", "y-254", "y-763", "y-1292")
 RAIL_SIDE_ORDER = ("right", "left")
 RAIL_AREA_ORDER = ("flange", "web")
-CROSSBEAM_SIDE_ORDER = ("front", "rear")
+CROSSBEAM_SIDE_ORDER = ("rear", "front")
 
 
 class EnumScoreInterface(Enum):
@@ -104,6 +104,7 @@ class Area(object):
     Returns:
         int: area score
     """
+    
     crossbeam_side_score =  self._crossbeam_side.score if self._crossbeam_side else 0
     rail_side_score = self._rail_side.score if self._rail_side else 0
 
@@ -139,7 +140,7 @@ class Area(object):
         Area: the Area object described by the list of dict
     """
 
-    area = {}
+    area:Dict[str:AreaComponent] = {}
 
     for a in area_list:
       key = f"{a['reference']}_{a['type']}"
@@ -147,10 +148,16 @@ class Area(object):
       value = AreaScore[key][name]
       area[key] = AreaComponent(name, value)
 
-    instance = Area(area.get('aircraft_rail'),
-                    area.get('rail_area'),
-                    area.get('crossbeam_side'),
-                    area.get('rail_side'))
+    aircraft_rail:AreaComponent = area.get('aircraft_rail')
+    rail_area:AreaComponent = area.get('rail_area')
+    
+    crossbeam_side = area.get('crossbeam_side') if rail_area.value =='flange' else None
+    rail_side = area.get('rail_side') if rail_area.value =='flange' else None
+
+    instance = Area(aircraft_rail,
+                    rail_area,
+                    crossbeam_side,
+                    rail_side)
 
     return instance
 
@@ -216,16 +223,14 @@ class Position:
     
     area = Area.parse(position['areas'])
     coordinates = position.get('coordinates')
-    
-    if coordinates:
-      if area.crossbeam_side.value == "rear" and\
-        area.rail_area.value == 'flange':
-        reverse = True
-      else: 
+    reverse = True
+
+    if coordinates and area.rail_area.value == 'flange':
+      if area.crossbeam_side.value == "front":
         reverse = False
       
-      coordinates = Coordinates.parse(position['coordinates'],
-                                      reverse=reverse)
+    coordinates = Coordinates.parse(position['coordinates'],
+                                    reverse=reverse)
 
     return Position(area, coordinates)
 
